@@ -1,0 +1,28 @@
+body {
+    width: 600px;
+    height: 600px;
+    margin: 0;
+    padding: 5px;
+    background-color: #fff;
+    overflow: auto;
+    font-family: sans-serif;
+  }
+
+  .heartbeat {
+    
+    background-color: lightgray;
+    font-family: sans-serif;
+    font-style: italic;
+    font-size: small;
+    border-radius: 3px;
+    color: black;
+
+  }
+
+
+    .CodeMirror, .CodeMirror-scroll {
+        min-height: 200px;
+        
+    }
+
+ 

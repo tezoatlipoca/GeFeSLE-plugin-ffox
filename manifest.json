@@ -1,0 +1,31 @@
+{
+    "manifest_version": 2,
+    "name": "GeFeSLE Firefox Plugin",
+    "version": "0.1",
+    "description": "Firefox Plugin for GeFeSLE - Generic, Federated, Subscribable List Engine",
+    "icons": {
+      "48": "icons/gefesle.ff.png"
+    },
+    "background": {
+      "scripts": ["background.js"]
+    },
+    "browser_action": {
+      "default_icon": {
+        "48": "icons/gefesle.ff.png"
+      },
+      "default_title": "GeFeSLE Firefox Plugin",
+      "default_popup": "gefesle.popup.html"
+    },
+    "permissions": ["activeTab", "storage", "cookies"],
+    "commands": {
+      "_execute_browser_action": {
+        "suggested_key": {
+          "default": "Ctrl+Alt+X",
+          "mac": "Command+Alt+X"
+        },
+        "description": "Opens my extension"
+      }
+    }
+    
+    
+}

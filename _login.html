@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<html>
+    <title>LOGIN PAGE</title>
+        <head>
+        
+            <link rel="stylesheet" type="text/css" href="/gefesle.ff.plugin.css">
+            <link rel="icon" href="/gefesle.ff.png">
+            <script src="gefesle.plugin.js"></script>
+            
+        </head>
+        <body>
+        <p><a href="gefesle.popup.html">GeFeSLE</a>  - <a href="gefesle.config.html">Config</a>  - <b>Login</b></p>
+            <form id="loginform" method='post' >
+                <label for='username'>Username:</label><br>
+                <input type='text' id='username' name='username'><br>
+                <label for='password'>Password:</label><br>
+                <input type='password' id='password' name='password'><br>
+                <input type='submit' value='Login'>
+            </form>
+            <p>
+                <h3>Or log in with:</h3>
+                <a href="/googlelogin">Google</a> - 
+                <a href="/_mastodon.html">Mastodon</a>
+            </p>
+            <span id="result" class="result"></span><br>
+            <span id="heartbeat" class="heartbeat"></span>
+        </body>
+    </html>
