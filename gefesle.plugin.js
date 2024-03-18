@@ -302,12 +302,26 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     else if (page == 'gefesle.popup.html') {
         popupLoad();
+        // uncomment this to enable the markdown editor
+        //var simplemde = new SimpleMDE({ element: document.getElementById("list.comment") });
+    }
+    else if (page == 'fileupload.html')
+    {
+        fileuploadLoad();
+        
     }
     else {
         console.error('Unknown page WE SHOULDNT GET HERE: ' + page);
     }
 
 });
+
+function fileuploadLoad() {
+    console.log('fileuploadLoad');
+    // When the form is submitted, send it to the REST API
+    document.getElementById('uploadform').addEventListener('submit', fileUpload);
+
+}
 
 
 
@@ -439,11 +453,91 @@ async function addThing(e) {
 
 }
 
+// ugh. ok we can't select a file to upload using the js. file selector because of this:
+// https://bugzilla.mozilla.org/show_bug.cgi?id=1378527
+// (i.e. bug in panels where something popped up from the popup panel causes it to lose focus and close)
+
+async function fileUpload(e) {
+    // prevent the form from submitting
+    e.preventDefault();
+    console.log('fileUpload called');
+    // get the file selected in upload form
+    let file = document.getElementById('uploadfiles').value;
+    // assume that {file} is a local file. Verify it exists
+    // and then upload it to the server
+    if(file == null || file == '')
+    {
+        d('No file selected');
+        c(RC.ERROR);
+        return;
+    }
+    else {
+        alert('File selected: ' + file);
+    }
+    // no further file system check is possible in a web extension
+
+    const storconfig = await loadStorconfig();
+
+    apiUrl = storconfig.url + '/fileuploadxfer/';
+    console.debug(' | API URL: ' + apiUrl);
+
+
+    // Call the REST API
+    let data = new FormData();
+    data.append('file', file);
+    let apiMethod = 'POST';
+    console.info(' | Calling API: ' + apiUrl + ' with data: ' + JSON.stringify(data));
+
+
+
+    fetch(apiUrl, {
+        method: apiMethod,
+        headers: {
+            "GeFeSLE-XMLHttpRequest": "true",
+            'Authorization': `Bearer ${storconfig.apiToken}`
+        },
+        credentials: 'include',
+        body: data
+    })
+        .then(response => {
+            // dump out the complete response object
+            console.debug(' | API Response: ' + JSON.stringify(response));
+            if (response.ok) {
+                return response.text();
+            }
+            else if (response.status == RC.NOT_FOUND) {
+                throw new Error('GeFeSLE server ' + storconfig.url + ' Not Found - check your settings');
+            }
+            else if (response.status == RC.UNAUTHORIZED) {
+                throw new Error('Not authorized - have you logged in yet? <a href="_login.html">Login</a>');
+            }
+            else if (response.status == RC.FORBIDDEN) {
+                throw new Error('Forbidden - have you logged in yet? <a href="_login.html">Login</a>');
+            }
+            else {
+                throw new Error('Error ' + response.status + ' - ' + response.statusText);
+            }
 
 
 
 
-//var simplemde = new SimpleMDE({ element: document.getElementById("list.comment") });
+        })
+
+        .then(data => {
+            console.log('Success:', data);
+            d('Success: ' + data);
+            c(RC.OK);
+            setTimeout(() => {
+                window.close();
+            }, 5000);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            d('Error: ' + error);
+            c(RC.ERROR);
+        });
+    
+}
 
 
 
