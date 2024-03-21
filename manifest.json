@@ -16,7 +16,7 @@
       "default_title": "GeFeSLE Firefox Plugin",
       "default_popup": "gefesle.popup.html"
     },
-    "permissions": ["activeTab", "storage", "cookies"],
+    "permissions": ["activeTab", "storage", "cookies","tabs", "<all_urls>"],
     "commands": {
       "_execute_browser_action": {
         "suggested_key": {

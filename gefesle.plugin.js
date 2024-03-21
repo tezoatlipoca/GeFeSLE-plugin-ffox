@@ -243,6 +243,8 @@ async function popupLoad() {
     // When the form is submitted, send it to the REST API
     document.getElementById('addnew-form').addEventListener('submit', addThing);
 
+
+
     // When the popup is loaded, retrieve the saved settings and set the value of the form fields
     document.getElementById('listname').textContent = storConfig.listname;
 
@@ -255,6 +257,30 @@ async function popupLoad() {
         document.getElementById('list.url').value = activeTabUrl;
     });
 
+    // add event listener to the receipt form
+    document.getElementById('receiptform').addEventListener('submit', receiptsend);
+
+}
+
+async function receiptsend(e) {
+    console.log('receiptsend');
+
+    let filename = await receiptUpload(e);
+    console.log('RECEIVED filename: ' + filename);
+    if (filename != null) {
+        
+        
+        console.log('NOW calling addThing');
+        // add the filename to let comment = document.getElementById('list.comment').value;
+        let comment = document.getElementById('list.comment').value;
+        comment = comment + ' ' + filename;
+        document.getElementById('list.comment').value = comment;
+        await addThing(e);
+    }
+    else {
+        d('Error uploading receipt image');
+        c(RC.ERROR);
+    }
 }
 
 
@@ -305,24 +331,11 @@ document.addEventListener('DOMContentLoaded', function () {
         // uncomment this to enable the markdown editor
         //var simplemde = new SimpleMDE({ element: document.getElementById("list.comment") });
     }
-    else if (page == 'fileupload.html')
-    {
-        fileuploadLoad();
-        
-    }
     else {
         console.error('Unknown page WE SHOULDNT GET HERE: ' + page);
     }
 
 });
-
-function fileuploadLoad() {
-    console.log('fileuploadLoad');
-    // When the form is submitted, send it to the REST API
-    document.getElementById('uploadform').addEventListener('submit', fileUpload);
-
-}
-
 
 
 // redirect handler for the login page form target
@@ -457,25 +470,23 @@ async function addThing(e) {
 // https://bugzilla.mozilla.org/show_bug.cgi?id=1378527
 // (i.e. bug in panels where something popped up from the popup panel causes it to lose focus and close)
 
-async function fileUpload(e) {
+async function receiptUpload(e) {
+
+
     // prevent the form from submitting
     e.preventDefault();
-    console.log('fileUpload called');
-    // get the file selected in upload form
-    let file = document.getElementById('uploadfiles').value;
-    // assume that {file} is a local file. Verify it exists
-    // and then upload it to the server
-    if(file == null || file == '')
-    {
-        d('No file selected');
-        c(RC.ERROR);
-        return;
-    }
-    else {
-        alert('File selected: ' + file);
-    }
-    // no further file system check is possible in a web extension
-
+    console.log('receiptUpload called');
+    // get the screenshot
+    let file = await captureTabAsFile();
+    console.log('file name: ' + file.name);
+    let url = URL.createObjectURL(file);
+    let img = document.createElement('img');
+    img.src = url;
+    // make the img only 100px wide
+    img.style.width = '100px';
+    document.getElementById('result').appendChild(img);
+    // pause for a second to let the image load
+    new Promise(r => setTimeout(r, 1000));
     const storconfig = await loadStorconfig();
 
     apiUrl = storconfig.url + '/fileuploadxfer/';
@@ -488,13 +499,22 @@ async function fileUpload(e) {
     let apiMethod = 'POST';
     console.info(' | Calling API: ' + apiUrl + ' with data: ' + JSON.stringify(data));
 
+    let token = await getAntiForgeryToken();
+    console.debug(' | anti-forgery token: ' + token);
+    if (token == null || token == '' || 'antiforgeToken' in token == false) {
+        d('No anti-forgery token found/obtained');
+        c(RC.ERROR);
+        return null;
+    }
+    console.debug(' | jwt token: ' + storconfig.apiToken);
+    console.debug(' | anti-forgery token: ' + token.antiforgeToken);
 
-
-    fetch(apiUrl, {
+    await fetch(apiUrl, {
         method: apiMethod,
         headers: {
             "GeFeSLE-XMLHttpRequest": "true",
-            'Authorization': `Bearer ${storconfig.apiToken}`
+            'Authorization': `Bearer ${storconfig.apiToken}`,
+            'RequestVerificationToken': token.antiforgeToken
         },
         credentials: 'include',
         body: data
@@ -527,17 +547,106 @@ async function fileUpload(e) {
             console.log('Success:', data);
             d('Success: ' + data);
             c(RC.OK);
-            setTimeout(() => {
-                window.close();
-            }, 5000);
+            
+            
+            console.log('returning file name: ' + file.name);
+            return file.name;
         })
         .catch(error => {
             console.error('Error:', error);
             d('Error: ' + error);
             c(RC.ERROR);
+            return null;
         });
-    
+
+
 }
 
 
+async function getAntiForgeryToken() {
+    // get the anti-forgery token from the page
+    console.log('getAntiForgeryToken');
+    const storconfig = await loadStorconfig();
+    let result = await browser.storage.local.get('antiforgeToken');
 
+    if ('antiforgeToken' in result) {
+        console.debug(' | returning saved antiforgerytoken: ' + JSON.stringify(result));
+        return result;
+    }
+    else {
+        console.debug(' | no saved antiforgerytoken found - getting one');
+        let apiUrl = storconfig.url + '/antiforgerytoken';
+        fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                "GeFeSLE-XMLHttpRequest": "true",
+                'Authorization': `Bearer ${storconfig.apiToken}`
+            },
+            credentials: 'include' // Include cookies in the request
+        })
+            .then(response => {
+                // dump out the complete response object
+                console.debug(' | API Response: ' + response.status);
+                if (response.ok) {
+                    return response.json();
+                }
+                else if (response.status == RC.NOT_FOUND) {
+                    throw new Error('GeFeSLE server ' + storconfig.url + ' Not Found - check your settings');
+                }
+                else if (response.status == RC.UNAUTHORIZED) {
+                    throw new Error('Not authorized - have you logged in yet? <a href="_login.html">Login</a>');
+                }
+                else if (response.status == RC.FORBIDDEN) {
+                    throw new Error('Forbidden - have you logged in yet? <a href="_login.html">Login</a>');
+                }
+                else {
+                    throw new Error('Error ' + response.status + ' - ' + response.statusText);
+                }
+
+
+
+
+            })
+            .then(json => {
+                // Store the token in local storage
+                let requestToken = json.requestToken;
+                browser.storage.local.set({ antiforgeToken: requestToken });
+                console.debug(' | (success!) API Response {requestToken}: ' + requestToken);
+                return { antiforgeToken: requestToken };
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                d('Error: ' + error);
+                c(RC.ERROR);
+                return null;
+            })
+
+
+
+    }
+}
+
+async function captureTabAsFile() {
+    console.log('captureTabAsFile');
+    let tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    let screenshotUrl = await browser.tabs.captureTab(tabs[0].id, { format: 'png' });
+    let screenshotData = screenshotUrl.split(',')[1];
+    let screenshotBlob = base64ToBlob(screenshotData, 'image/png');
+    let currentDate = new Date();
+    // we want ISO 68whatever form but replace the colons to make the file name NTFS safe
+    currentDate = currentDate.toISOString().replace(/:/g, '-');
+    let screenshotFile = new File([screenshotBlob], `screenshot-${currentDate}.png`);
+    return screenshotFile;
+}
+
+function base64ToBlob(base64, type = '') {
+    console.log('base64ToBlob');
+    let binary = atob(base64.replace(/\s/g, ''));
+    let len = binary.length;
+    let buffer = new ArrayBuffer(len);
+    let view = new Uint8Array(buffer);
+    for (let i = 0; i < len; i++) {
+        view[i] = binary.charCodeAt(i);
+    }
+    return new Blob([view], { type });
+}
