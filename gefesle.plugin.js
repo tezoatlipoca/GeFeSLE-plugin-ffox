@@ -1,3 +1,6 @@
+var simplemde;
+
+
 // method for feedback to page viewer user
 // function that takes the provides string and writes it into the 
 // span with id="result"
@@ -219,8 +222,8 @@ async function loadLists() {
 
 async function loadStorconfig() {
     const storconfig = await browser.storage.local.get(['url', 'listid', 'listname', 'apiToken']);
-    console.debug(' | Stored list parameters loaded: url=' + storconfig.url + ', listid=' + storconfig.listid + ', listname=' + storconfig.listname);
-    console.debug(' | Stored API Token: ' + storconfig.apiToken);
+    //console.debug(' | Stored list parameters loaded: url=' + storconfig.url + ', listid=' + storconfig.listid + ', listname=' + storconfig.listname);
+    //console.debug(' | Stored API Token: ' + storconfig.apiToken);
     return storconfig;
 }
 
@@ -257,31 +260,73 @@ async function popupLoad() {
         document.getElementById('list.url').value = activeTabUrl;
     });
 
-    // add event listener to the receipt form
-    document.getElementById('receiptform').addEventListener('submit', receiptsend);
+    //program onClick handler for button receiptbutton
+    document.getElementById('receiptbutton').addEventListener('click', receiptSend);
+
+    let selectedText = await getTabSelection();
+    if (selectedText != null) {
+        // if there are multiple lines, prepend each with markdown > quote character
+        //selectedText = selectedText.replace(/^/gm, '> ');
+        
+        // selected text is HTML; convert to markdown
+        let converter = new showdown.Converter();
+        selectedText = converter.makeMarkdown(selectedText);
+        
+        simplemde.value(selectedText);
+    }
 
 }
 
-async function receiptsend(e) {
-    console.log('receiptsend');
+async function getTabSelection() {
+    // Get the current active tab
+    let tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    // tabs[0] is the active tab
+    let activeTab = tabs[0];
+    console.log('activeTab: ' + activeTab.id);
+    console.log('activeTab: ' + activeTab.url); 
+    // Inject a content script into the active tab
+    let results = await browser.tabs.executeScript(activeTab.id, {
+        //this just gets selection as a string
+        //code: 'window.getSelection().toString();'
 
-    let filename = await receiptUpload(e);
-    console.log('RECEIVED filename: ' + filename);
-    if (filename != null) {
-        
-        
-        console.log('NOW calling addThing');
-        // add the filename to let comment = document.getElementById('list.comment').value;
-        let comment = document.getElementById('list.comment').value;
-        comment = comment + ' ' + filename;
-        document.getElementById('list.comment').value = comment;
-        await addThing(e);
+        code: `
+    
+        (() => {
+            let selection = window.getSelection();
+            let range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+            let fragment = range ? range.cloneContents() : null;
+            let selectedHtml = '';
+    
+            if (fragment) {
+                for (let node of fragment.childNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        selectedHtml += node.outerHTML;
+                    } else if (node.nodeType === Node.TEXT_NODE) {
+                        selectedHtml += node.textContent;
+                    }
+                }
+            }
+    
+            return selectedHtml;
+        })();
+    `
+
+    });
+    // results[0] is the result of the last expression evaluated in the content script
+    console.log('results: ' + results);
+    let selectedText = results[0];
+
+    if (selectedText == '') {
+        return null;
     }
     else {
-        d('Error uploading receipt image');
-        c(RC.ERROR);
+        // Do something with the selected text...
+        console.log('stuff selected on current page: ' + selectedText);
+        return selectedText;
     }
+
 }
+
 
 
 async function configLoad() {
@@ -329,7 +374,7 @@ document.addEventListener('DOMContentLoaded', function () {
     else if (page == 'gefesle.popup.html') {
         popupLoad();
         // uncomment this to enable the markdown editor
-        //var simplemde = new SimpleMDE({ element: document.getElementById("list.comment") });
+        simplemde = new SimpleMDE({ element: document.getElementById("list.comment") });
     }
     else {
         console.error('Unknown page WE SHOULDNT GET HERE: ' + page);
@@ -380,6 +425,10 @@ async function loginRedirect() {
             d(msg);
             c(RC.OK);
             console.log(msg);
+            // zero out any stale anti-forgery tokens in storage
+            if (antiforgeToken) {
+                browser.storage.local.remove('antiforgeToken');
+            }
         })
         .catch(error => {
             console.error('Error:', error);
@@ -403,7 +452,8 @@ async function addThing(e) {
 
     let name = document.getElementById('list.url').value;
     let listid = storconfig.listid;
-    let comment = document.getElementById('list.comment').value;
+    //let comment = document.getElementById('list.comment').value;
+    let comment = simplemde.value();
     let tagsall = document.getElementById('list.tags').value;
 
     // convert tags into a list of strings
@@ -472,9 +522,6 @@ async function addThing(e) {
 
 async function receiptUpload(e) {
 
-
-    // prevent the form from submitting
-    e.preventDefault();
     console.log('receiptUpload called');
     // get the screenshot
     let file = await captureTabAsFile();
@@ -485,8 +532,7 @@ async function receiptUpload(e) {
     // make the img only 100px wide
     img.style.width = '100px';
     document.getElementById('result').appendChild(img);
-    // pause for a second to let the image load
-    new Promise(r => setTimeout(r, 1000));
+
     const storconfig = await loadStorconfig();
 
     apiUrl = storconfig.url + '/fileuploadxfer/';
@@ -500,14 +546,14 @@ async function receiptUpload(e) {
     console.info(' | Calling API: ' + apiUrl + ' with data: ' + JSON.stringify(data));
 
     let token = await getAntiForgeryToken();
-    console.debug(' | anti-forgery token: ' + token);
+    console.debug(' | anti-forgery token: ' + JSON.stringify(token));
     if (token == null || token == '' || 'antiforgeToken' in token == false) {
         d('No anti-forgery token found/obtained');
         c(RC.ERROR);
         return null;
     }
-    console.debug(' | jwt token: ' + storconfig.apiToken);
-    console.debug(' | anti-forgery token: ' + token.antiforgeToken);
+    //console.debug(' | jwt token: ' + storconfig.apiToken);
+    //console.debug(' | anti-forgery token: ' + token.antiforgeToken);
 
     await fetch(apiUrl, {
         method: apiMethod,
@@ -520,8 +566,7 @@ async function receiptUpload(e) {
         body: data
     })
         .then(response => {
-            // dump out the complete response object
-            console.debug(' | API Response: ' + JSON.stringify(response));
+
             if (response.ok) {
                 return response.text();
             }
@@ -534,23 +579,44 @@ async function receiptUpload(e) {
             else if (response.status == RC.FORBIDDEN) {
                 throw new Error('Forbidden - have you logged in yet? <a href="_login.html">Login</a>');
             }
-            else {
-                throw new Error('Error ' + response.status + ' - ' + response.statusText);
+            else if (response.status == RC.BAD_REQUEST) {
+                // in this case the response body is a custom error object 
+                // from the server that we trapped in the anti-forgery middleware:
+                // var responseBody = new
+                // {
+                //     error = new
+                //     {
+                //         message = antiForgeryEx.Message,
+                //         type = antiForgeryEx.GetType().Name
+                //     }
+                // };
+                // get the error object from the response and throw it
+                let errormsg = null;
+                let errortype = null;
+                return response.json().then(err => {
+                    errormsg = err.error.message;
+                    errortype = err.error.type;
+                    //     browser.storage.local.set({ returnFileName: null});
+                    //     throw new Error('Bad Request - ' + errormsg + ' - ' + errortype);
+
+                    d(errortype + ' - ' + errormsg + ' Try logging in again');
+                    c(RC.ERROR);
+                    return null;
+                });
             }
-
-
-
-
+            else {
+                throw new Error(response.statusText);
+            }
         })
-
         .then(data => {
-            console.log('Success:', data);
-            d('Success: ' + data);
-            c(RC.OK);
-            
-            
-            console.log('returning file name: ' + file.name);
-            return file.name;
+            let returnFileName = data;
+            console.log('returning file name: ' + returnFileName);
+            // store returnFilename in browser storage
+            // because I hate trying to debug promises and I kept getting
+            // undefined when I tried to return the value from here to 
+            // let filename = await receiptUpload(e);
+            browser.storage.local.set({ returnFileName });
+            return returnFileName;
         })
         .catch(error => {
             console.error('Error:', error);
@@ -558,8 +624,30 @@ async function receiptUpload(e) {
             c(RC.ERROR);
             return null;
         });
+}
 
+async function receiptSend(e) {
+    console.log('receiptsend');
+    await receiptUpload(e);
+    // get the stored returnFileName; total hack to get around 
+    // dealing with unresolved promises see return from receiptUpload above. 
+    let savefile = await browser.storage.local.get('returnFileName');
+    console.log('GOT SAVED returnFileName: ' + savefile.returnFileName);
+    browser.storage.local.remove('returnFileName');
 
+    // add the filename as an HTML image link to the end of the comment field
+
+    // this is if you're not using the markdown editor
+    //let comment = document.getElementById('list.comment');
+
+    // strip any "" marks from around the filename if they exist
+    savefile.returnFileName = savefile.returnFileName.replace(/"/g, '');
+    // append to the value already in comment
+    let oldval = simplemde.value();
+    console.debug('oldval: ' + oldval);
+    let newval = oldval + ' ![receipt](' + savefile.returnFileName + ')';
+    simplemde.value(newval);
+    //comment.value = comment.value + ' ![receipt](' + savefile.returnFileName + ')';
 }
 
 
@@ -570,7 +658,7 @@ async function getAntiForgeryToken() {
     let result = await browser.storage.local.get('antiforgeToken');
 
     if ('antiforgeToken' in result) {
-        console.debug(' | returning saved antiforgerytoken: ' + JSON.stringify(result));
+        //console.debug(' | returning saved antiforgerytoken: ' + JSON.stringify(result));
         return result;
     }
     else {

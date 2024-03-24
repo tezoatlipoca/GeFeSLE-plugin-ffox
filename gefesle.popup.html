@@ -5,12 +5,14 @@
   <link rel="stylesheet" type="text/css" href="gefesle.ff.plugin.css">
   <link rel="stylesheet" href="/simplemde.min.css">
   <script src="gefesle.plugin.js"></script>
-  <!--<script src="/simplemde.min.js"></script>-->
-
+  <!-- simpelMDE - markdown WYSIWYG editor -->
+  <script src="/simplemde.min.js"></script>
+  <!-- showdown is html > markdown converter. used for quoting into the simpleMDE box-->
+  <script src="showdown.js"></script>
 
 </head>
 <body>
-  <p><b>GeFeSLE</b> - <a href="gefesle.config.html">Config</a> - <a href="_login.html">Login</a> - <a href="receipt.html">RECEIPT</a></p>
+  <p><b>GeFeSLE</b> - <a href="gefesle.config.html">Config</a> - <a href="_login.html">Login</a></p>
   <p>LIST: <span id="listname"></span></p>
   <form id="addnew-form" class="gefesle.form">
     <input type="text" id="list.url" name="list.url"><br>
@@ -19,9 +21,8 @@
     <input type="submit" value="SEND">
     
   </form>
-  <form id="receiptform" class="receiptform">
-    <input type="submit" value="RECEIPT IT">
-  </form>
+ 
+  <button id="receiptbutton">RECEIPT IT</button>
   <span id="result" class="result"></span><br>
   <span id="heartbeat" class="heartbeat"></span>
 
