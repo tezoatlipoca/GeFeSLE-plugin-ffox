@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "easymde": "^2.18.0",
+    "showdown": "^2.1.0"
+  },
+  "devDependencies": {
+    "gulp": "^5.0.0"
+  }
+}

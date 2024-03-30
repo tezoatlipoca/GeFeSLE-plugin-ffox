@@ -1,4 +1,4 @@
-var simplemde;
+var easymde;
 
 
 // method for feedback to page viewer user
@@ -82,7 +82,60 @@ function c(RC) {
 }
 
 
+async function amloggedin(serverUrl, apiToken) {
+    let fn = 'amloggedin';
+    console.log(fn);
+    
+    try {
+        apiUrl = serverUrl + '/amloggedin/'
+        console.debug(fn + ' | API URL: ' + apiUrl);
 
+        // Perform a GET request
+        return await fetch(apiUrl, {
+            headers: {
+                "GeFeSLE-XMLHttpRequest": "true",
+                'Authorization': `Bearer ${apiToken}`
+            },
+            credentials: 'include'
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                else if (response.status == RC.NOT_FOUND) {
+                    throw new Error('GeFeSLE Server: ' + storconfig.url + ' Not Found - check your settings');
+                }
+                else if (response.status == RC.UNAUTHORIZED) {
+                    throw new Error('Not authorized - have you logged in yet? <a href="' + storconfig.url + '/login">Login</a>');
+                }
+                else if (response.status == RC.FORBIDDEN) {
+                    throw new Error('Forbidden - have you logged in yet? <a href="' + storconfig.url + '/login">Login</a>');
+                }
+                else {
+                    throw new Error('Error ' + response.status + ' - ' + response.statusText);
+                }
+
+            })
+            .then(json => {
+                let username = json.username;
+                let role = json.role;
+                console.debug(fn + ' | API Response: ' + JSON.stringify(json));
+                if ((username == null) || (role == null)) {
+                    console.debug(fn + ' | returning null value!');
+                    return [null, null];
+                }
+                else {
+                    console.debug(fn + ' | returning [ ' + username + ',' + role);
+                    return [username, role];
+                }
+                
+            });
+    } catch (error) {
+        console.error('Error:', error);
+        d('Error: ' + error);
+        c(RC.ERROR);
+    }
+}
 
 
 
@@ -103,7 +156,7 @@ async function writeHeartbeatResult(serverUrl) {
         console.debug(' | API URL: ' + apiUrl);
 
         // Perform a GET request
-        fetch(apiUrl)
+        await fetch(apiUrl)
             .then(response => {
                 if (response.ok) {
                     return response.text();
@@ -127,7 +180,7 @@ async function writeHeartbeatResult(serverUrl) {
                 // get the heartbeat div
                 let heartBeatElement = document.getElementById('heartbeat');
                 heartBeatElement.textContent = data;
-
+               
 
             });
     } catch (error) {
@@ -243,6 +296,13 @@ async function popupLoad() {
     const storConfig = await loadStorconfig();
 
     writeHeartbeatResult(storConfig.url);
+    // let [username, role] = await amloggedin(storConfig.url, storConfig.apiToken);
+    // if (username != null) {
+    //     // append these to the heartbeat div
+    //     let heartBeatElement = document.getElementById('heartbeat');
+    //     heartBeatElement.appendChild(document.createElement('br'));
+    //     heartBeatElement.appendChild(document.createTextNode('logged in as ' + username + ' with role ' + role));
+    //     }
     // When the form is submitted, send it to the REST API
     document.getElementById('addnew-form').addEventListener('submit', addThing);
 
@@ -272,7 +332,7 @@ async function popupLoad() {
         let converter = new showdown.Converter();
         selectedText = converter.makeMarkdown(selectedText);
         
-        simplemde.value(selectedText);
+        easymde.value(selectedText);
     }
 
 }
@@ -374,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function () {
     else if (page == 'gefesle.popup.html') {
         popupLoad();
         // uncomment this to enable the markdown editor
-        simplemde = new SimpleMDE({ element: document.getElementById("list.comment") });
+        easymde = new EasyMDE({ element: document.getElementById("list.comment") });
     }
     else {
         console.error('Unknown page WE SHOULDNT GET HERE: ' + page);
@@ -426,6 +486,7 @@ async function loginRedirect() {
             c(RC.OK);
             console.log(msg);
             // zero out any stale anti-forgery tokens in storage
+            let antiforgeToken = browser.storage.local.get('antiforgeToken');
             if (antiforgeToken) {
                 browser.storage.local.remove('antiforgeToken');
             }
@@ -453,7 +514,7 @@ async function addThing(e) {
     let name = document.getElementById('list.url').value;
     let listid = storconfig.listid;
     //let comment = document.getElementById('list.comment').value;
-    let comment = simplemde.value();
+    let comment = easymde.value();
     let tagsall = document.getElementById('list.tags').value;
 
     // convert tags into a list of strings
@@ -515,10 +576,6 @@ async function addThing(e) {
         });
 
 }
-
-// ugh. ok we can't select a file to upload using the js. file selector because of this:
-// https://bugzilla.mozilla.org/show_bug.cgi?id=1378527
-// (i.e. bug in panels where something popped up from the popup panel causes it to lose focus and close)
 
 async function receiptUpload(e) {
 
@@ -643,10 +700,10 @@ async function receiptSend(e) {
     // strip any "" marks from around the filename if they exist
     savefile.returnFileName = savefile.returnFileName.replace(/"/g, '');
     // append to the value already in comment
-    let oldval = simplemde.value();
+    let oldval = easymde.value();
     console.debug('oldval: ' + oldval);
     let newval = oldval + ' ![receipt](' + savefile.returnFileName + ')';
-    simplemde.value(newval);
+    easymde.value(newval);
     //comment.value = comment.value + ' ![receipt](' + savefile.returnFileName + ')';
 }
 
