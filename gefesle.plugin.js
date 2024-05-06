@@ -82,6 +82,52 @@ function c(RC) {
 }
 
 
+function handleResponse(response) {
+    console.debug('handleResponse'); 
+    if (response.status === 204) {
+        return null;
+    }
+    else if (!response.ok) {
+        let contentType = response.headers.get("Content-Type");
+
+        if (contentType != null && contentType.includes("application/json")) {
+            // The response is JSON
+            return response.json().then(errorDetails => {
+                // Check if errorDetails is an object
+                if (typeof errorDetails === 'object' && errorDetails !== null) {
+                    let errorDetailsString = '';
+                    for (let key in errorDetails) {
+                        if (typeof errorDetails[key] === 'object' && errorDetails[key] !== null) {
+                            for (let subKey in errorDetails[key]) {
+                                errorDetailsString += ` ${errorDetails[key][subKey]}<br>\n`;
+                            }
+                        } else {
+                            errorDetailsString += `${key}: ${errorDetails[key]}<br>\n`;
+                        }
+                    }
+                    return Promise.reject(new Error(errorDetailsString));
+                } else {
+                    // errorDetails is not an object, return it as the error message
+                    return Promise.reject(new Error(errorDetails));
+                }
+            });
+        }
+        else if (contentType != null && contentType.includes("text/plain")) {
+            // The response is text
+            return response.text().then(errorDetails => {
+                throw new Error(`${response.status} - ${response.statusText} - ${response.url} - ${errorDetails}`);
+            });
+        }
+        else {
+            // The response is some other type
+            throw new Error(`${response.status} - ${response.statusText} - ${response.url}`);
+        }
+    } else {
+    return response;
+    }
+}
+
+
 async function amloggedin(serverUrl, apiToken) {
     let fn = 'amloggedin';
     console.log(fn);
@@ -98,23 +144,11 @@ async function amloggedin(serverUrl, apiToken) {
             },
             credentials: 'include'
             })
+            .then(handleResponse)
             .then(response => {
                 if (response.ok) {
                     return response.json();
                 }
-                else if (response.status == RC.NOT_FOUND) {
-                    throw new Error('GeFeSLE Server: ' + storconfig.url + ' Not Found - check your settings');
-                }
-                else if (response.status == RC.UNAUTHORIZED) {
-                    throw new Error('Not authorized - have you logged in yet? <a href="' + storconfig.url + '/login">Login</a>');
-                }
-                else if (response.status == RC.FORBIDDEN) {
-                    throw new Error('Forbidden - have you logged in yet? <a href="' + storconfig.url + '/login">Login</a>');
-                }
-                else {
-                    throw new Error('Error ' + response.status + ' - ' + response.statusText);
-                }
-
             })
             .then(json => {
                 let username = json.username;
@@ -152,34 +186,37 @@ async function writeHeartbeatResult(serverUrl) {
         return;
     }
     try {
-        apiUrl = serverUrl + '/heartbeat/';
+        apiUrl = serverUrl + '/me/';
         console.debug(' | API URL: ' + apiUrl);
-
+        const storconfig = await loadStorconfig();
         // Perform a GET request
-        await fetch(apiUrl)
-            .then(response => {
-                if (response.ok) {
-                    return response.text();
-                }
-                else if (response.status == RC.NOT_FOUND) {
-                    throw new Error('GeFeSLE server ' + storconfig.url + ' Not Found - check your settings');
-                }
-                else if (response.status == RC.UNAUTHORIZED) {
-                    throw new Error('Not authorized - have you logged in yet? <a href="' + storconfig.url + '/login">Login</a>');
-                }
-                else if (response.status == RC.FORBIDDEN) {
-                    throw new Error('Forbidden - have you logged in yet? <a href="' + storconfig.url + '/login">Login</a>');
+        await fetch(apiUrl,
+            {
+                headers: {
+                    "GeFeSLE-XMLHttpRequest": "true",
+                    'Authorization': `Bearer ${storconfig.apiToken}`
+                },
+                credentials: 'include'
+            }
+        )
+            .then(handleResponse)
+            .then(response => response.json())
+            .then(json => {
+                let username = json.userName;
+                let role = json.role;
+                let now = new Date();
+                let msg = null;
+                now = now.toISOString();
+                if(username == null || role == null) {
+                    msg = `${now} connected to ${serverUrl} - BUT NOT LOGGED IN`;
                 }
                 else {
-                    throw new Error('Error ' + response.status + ' - ' + response.statusText);
+                    msg = `${now} logged into ${serverUrl} as ${username} with role ${role}`;
                 }
-
-            })
-            .then(data => {
-                console.log('Success:', data);
+                console.log(msg);
                 // get the heartbeat div
                 let heartBeatElement = document.getElementById('heartbeat');
-                heartBeatElement.textContent = data;
+                heartBeatElement.textContent = msg;
                
 
             });
@@ -224,7 +261,7 @@ async function loadLists() {
         return;
     }
     else {
-        apiUrl = apiUrl + '/showlists';
+        apiUrl = apiUrl + '/lists';
 
     }
     // get the apiToken from local storage
@@ -309,7 +346,10 @@ async function popupLoad() {
 
 
     // When the popup is loaded, retrieve the saved settings and set the value of the form fields
-    document.getElementById('listname').textContent = storConfig.listname;
+    // the listname will also be a link TO the list on the server
+    let listlink = storConfig.url + '/' + storConfig.listname + '.html';
+    let displayKontent = `<a href="${listlink}" target="_blank">${storConfig.listname}</a>`
+    document.getElementById('listname').innerHTML = displayKontent;
 
 
     // Get the current active tab
@@ -445,7 +485,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // redirect handler for the login page form target
 async function loginRedirect() {
-    console.log('loginRedirect');
+    let fn = "loginRedirect"; console.log(fn);
     // prevent the form from submitting
     event.preventDefault();
     const storconfig = await loadStorconfig();
@@ -454,46 +494,38 @@ async function loginRedirect() {
         return;
     }
 
-    let apiUrl = storconfig.url + '/login';
+    let apiUrl = storconfig.url + '/me';
     console.log('apiUrl: ' + apiUrl);
     fetch(apiUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            "GeFeSLE-XMLHttpRequest": "true"
+            "GeFeSLE-XMLHttpRequest": "true",
+            'Authorization': `Bearer ${storconfig.apiToken}`
         },
         body: new URLSearchParams(new FormData(document.getElementById('loginform')))
     })
-        .then(response => {
-            //console.debug(' | API Response: ' + response.text());
-            if (response.ok) {
-                return response.json();
-            }
-            else {
-                return response.text().then(text => { throw new Error('Error ' + response.status + ' - ' + response.statusText + ' - ' + text); });
-            }
-        })
+        .then(handleResponse)
+        .then(response => response.json())
         .then(json => {
             // on a successful login, contains json with elements {token: "token", username: "username", role: "role"}  
-            console.debug(' | API Response: ' + JSON.stringify(json));
-            console.debug(' | new token: ' + json.token);
-            console.debug(' | login username: ' + json.username);
-            console.debug(' | as role: ' + json.role);
-            // store the token in local storage
+            console.debug(`${fn} -- entire response: ${JSON.stringify(json)}`);
+            console.debug(`${fn} -- API token: ${json.token}`);
+            console.debug(`${fn} -- antiforgery token: ${json.antiforgerytoken.requestToken}`);
+            console.debug(`${fn} -- username: ${json.username}`);
+            console.debug(`${fn} -- role: ${json.role}`);
+            // store the tokens in local storage
             browser.storage.local.set({ apiToken: json.token });
+            browser.storage.local.set({ antiforgeToken: json.antiforgerytoken.requestToken });
             let msg = `Logged in to ${apiUrl} as ${json.username} with role ${json.role}`;
             d(msg);
             c(RC.OK);
             console.log(msg);
-            // zero out any stale anti-forgery tokens in storage
-            let antiforgeToken = browser.storage.local.get('antiforgeToken');
-            if (antiforgeToken) {
-                browser.storage.local.remove('antiforgeToken');
-            }
+            
         })
         .catch(error => {
-            console.error('Error:', error);
-            d('Error: ' + error);
+            console.error(error);
+            d(error);
             c(RC.ERROR);
         });
 }
@@ -537,29 +569,14 @@ async function addThing(e) {
         credentials: 'include',
         body: JSON.stringify(data),
     })
+        .then(handleResponse)
         .then(response => {
             // dump out the complete response object
             console.debug(' | API Response: ' + JSON.stringify(response));
             if (response.ok) {
                 return response.text();
             }
-            else if (response.status == RC.NOT_FOUND) {
-                throw new Error('GeFeSLE server ' + storconfig.url + ' Not Found - check your settings');
-            }
-            else if (response.status == RC.UNAUTHORIZED) {
-                throw new Error('Not authorized - have you logged in yet? <a href="_login.html">Login</a>');
-            }
-            else if (response.status == RC.FORBIDDEN) {
-                throw new Error('Forbidden - have you logged in yet? <a href="_login.html">Login</a>');
-            }
-            else {
-                throw new Error('Error ' + response.status + ' - ' + response.statusText);
-            }
-
-
-
-
-        })
+            })
 
         .then(data => {
             console.log('Success:', data);
@@ -578,11 +595,10 @@ async function addThing(e) {
 }
 
 async function receiptUpload(e) {
-
-    console.log('receiptUpload called');
+    let fn = 'receiptUpload'; console.debug(fn);
     // get the screenshot
     let file = await captureTabAsFile();
-    console.log('file name: ' + file.name);
+    console.log(`${fn} -- file name: ${file.name}`);
     let url = URL.createObjectURL(file);
     let img = document.createElement('img');
     img.src = url;
@@ -593,18 +609,18 @@ async function receiptUpload(e) {
     const storconfig = await loadStorconfig();
 
     apiUrl = storconfig.url + '/fileuploadxfer/';
-    console.debug(' | API URL: ' + apiUrl);
+    console.debug(`${fn} --> ${apiUrl}`);
 
 
     // Call the REST API
     let data = new FormData();
     data.append('file', file);
     let apiMethod = 'POST';
-    console.info(' | Calling API: ' + apiUrl + ' with data: ' + JSON.stringify(data));
+    console.info(`${fn} ---> ${JSON.stringify(data)}`);
 
-    let token = await getAntiForgeryToken();
-    console.debug(' | anti-forgery token: ' + JSON.stringify(token));
-    if (token == null || token == '' || 'antiforgeToken' in token == false) {
+    let token = await browser.storage.local.get('antiforgeToken');
+    console.debug(`${fn} -- anti-forgery token: ${JSON.stringify(token)}`);
+    if (token == null || token == '') {
         d('No anti-forgery token found/obtained');
         c(RC.ERROR);
         return null;
@@ -622,49 +638,8 @@ async function receiptUpload(e) {
         credentials: 'include',
         body: data
     })
-        .then(response => {
-
-            if (response.ok) {
-                return response.text();
-            }
-            else if (response.status == RC.NOT_FOUND) {
-                throw new Error('GeFeSLE server ' + storconfig.url + ' Not Found - check your settings');
-            }
-            else if (response.status == RC.UNAUTHORIZED) {
-                throw new Error('Not authorized - have you logged in yet? <a href="_login.html">Login</a>');
-            }
-            else if (response.status == RC.FORBIDDEN) {
-                throw new Error('Forbidden - have you logged in yet? <a href="_login.html">Login</a>');
-            }
-            else if (response.status == RC.BAD_REQUEST) {
-                // in this case the response body is a custom error object 
-                // from the server that we trapped in the anti-forgery middleware:
-                // var responseBody = new
-                // {
-                //     error = new
-                //     {
-                //         message = antiForgeryEx.Message,
-                //         type = antiForgeryEx.GetType().Name
-                //     }
-                // };
-                // get the error object from the response and throw it
-                let errormsg = null;
-                let errortype = null;
-                return response.json().then(err => {
-                    errormsg = err.error.message;
-                    errortype = err.error.type;
-                    //     browser.storage.local.set({ returnFileName: null});
-                    //     throw new Error('Bad Request - ' + errormsg + ' - ' + errortype);
-
-                    d(errortype + ' - ' + errormsg + ' Try logging in again');
-                    c(RC.ERROR);
-                    return null;
-                });
-            }
-            else {
-                throw new Error(response.statusText);
-            }
-        })
+        .then(handleResponse)
+        .then(response => response.text())
         .then(data => {
             let returnFileName = data;
             console.log('returning file name: ' + returnFileName);
@@ -708,68 +683,6 @@ async function receiptSend(e) {
 }
 
 
-async function getAntiForgeryToken() {
-    // get the anti-forgery token from the page
-    console.log('getAntiForgeryToken');
-    const storconfig = await loadStorconfig();
-    let result = await browser.storage.local.get('antiforgeToken');
-
-    if ('antiforgeToken' in result) {
-        //console.debug(' | returning saved antiforgerytoken: ' + JSON.stringify(result));
-        return result;
-    }
-    else {
-        console.debug(' | no saved antiforgerytoken found - getting one');
-        let apiUrl = storconfig.url + '/antiforgerytoken';
-        fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-                "GeFeSLE-XMLHttpRequest": "true",
-                'Authorization': `Bearer ${storconfig.apiToken}`
-            },
-            credentials: 'include' // Include cookies in the request
-        })
-            .then(response => {
-                // dump out the complete response object
-                console.debug(' | API Response: ' + response.status);
-                if (response.ok) {
-                    return response.json();
-                }
-                else if (response.status == RC.NOT_FOUND) {
-                    throw new Error('GeFeSLE server ' + storconfig.url + ' Not Found - check your settings');
-                }
-                else if (response.status == RC.UNAUTHORIZED) {
-                    throw new Error('Not authorized - have you logged in yet? <a href="_login.html">Login</a>');
-                }
-                else if (response.status == RC.FORBIDDEN) {
-                    throw new Error('Forbidden - have you logged in yet? <a href="_login.html">Login</a>');
-                }
-                else {
-                    throw new Error('Error ' + response.status + ' - ' + response.statusText);
-                }
-
-
-
-
-            })
-            .then(json => {
-                // Store the token in local storage
-                let requestToken = json.requestToken;
-                browser.storage.local.set({ antiforgeToken: requestToken });
-                console.debug(' | (success!) API Response {requestToken}: ' + requestToken);
-                return { antiforgeToken: requestToken };
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                d('Error: ' + error);
-                c(RC.ERROR);
-                return null;
-            })
-
-
-
-    }
-}
 
 async function captureTabAsFile() {
     console.log('captureTabAsFile');
