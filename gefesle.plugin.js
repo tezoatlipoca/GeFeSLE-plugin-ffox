@@ -616,8 +616,7 @@ async function receiptUpload(e) {
     let data = new FormData();
     data.append('file', file);
     let apiMethod = 'POST';
-    console.info(`${fn} ---> ${JSON.stringify(data)}`);
-
+    
     let token = await browser.storage.local.get('antiforgeToken');
     console.debug(`${fn} -- anti-forgery token: ${JSON.stringify(token)}`);
     if (token == null || token == '') {
@@ -625,8 +624,7 @@ async function receiptUpload(e) {
         c(RC.ERROR);
         return null;
     }
-    //console.debug(' | jwt token: ' + storconfig.apiToken);
-    //console.debug(' | anti-forgery token: ' + token.antiforgeToken);
+    
 
     await fetch(apiUrl, {
         method: apiMethod,
