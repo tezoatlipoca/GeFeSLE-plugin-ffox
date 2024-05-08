@@ -500,8 +500,8 @@ async function loginRedirect() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            "GeFeSLE-XMLHttpRequest": "true",
-            'Authorization': `Bearer ${storconfig.apiToken}`
+            "GeFeSLE-XMLHttpRequest": "true"
+            //'Authorization': `Bearer ${storconfig.apiToken}`
         },
         body: new URLSearchParams(new FormData(document.getElementById('loginform')))
     })
