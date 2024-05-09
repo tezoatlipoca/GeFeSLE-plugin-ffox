@@ -83,7 +83,7 @@ function c(RC) {
 
 
 function handleResponse(response) {
-    console.debug('handleResponse'); 
+    console.debug('handleResponse');
     if (response.status === 204) {
         return null;
     }
@@ -123,7 +123,7 @@ function handleResponse(response) {
             throw new Error(`${response.status} - ${response.statusText} - ${response.url}`);
         }
     } else {
-    return response;
+        return response;
     }
 }
 
@@ -131,7 +131,7 @@ function handleResponse(response) {
 async function amloggedin(serverUrl, apiToken) {
     let fn = 'amloggedin';
     console.log(fn);
-    
+
     try {
         apiUrl = serverUrl + '/amloggedin/'
         console.debug(fn + ' | API URL: ' + apiUrl);
@@ -139,11 +139,10 @@ async function amloggedin(serverUrl, apiToken) {
         // Perform a GET request
         return await fetch(apiUrl, {
             headers: {
-                "GeFeSLE-XMLHttpRequest": "true",
-                'Authorization': `Bearer ${apiToken}`
+                "GeFeSLE-XMLHttpRequest": "true"
             },
             credentials: 'include'
-            })
+        })
             .then(handleResponse)
             .then(response => {
                 if (response.ok) {
@@ -162,7 +161,7 @@ async function amloggedin(serverUrl, apiToken) {
                     console.debug(fn + ' | returning [ ' + username + ',' + role);
                     return [username, role];
                 }
-                
+
             });
     } catch (error) {
         console.error('Error:', error);
@@ -207,7 +206,7 @@ async function writeHeartbeatResult(serverUrl) {
                 let now = new Date();
                 let msg = null;
                 now = now.toISOString();
-                if(username == null || role == null) {
+                if (username == null || role == null) {
                     msg = `${now} connected to ${serverUrl} - BUT NOT LOGGED IN`;
                 }
                 else {
@@ -217,7 +216,7 @@ async function writeHeartbeatResult(serverUrl) {
                 // get the heartbeat div
                 let heartBeatElement = document.getElementById('heartbeat');
                 heartBeatElement.textContent = msg;
-               
+
 
             });
     } catch (error) {
@@ -269,51 +268,38 @@ async function loadLists() {
 
 
     console.debug(' | API URL: ' + apiUrl);
-    try {
-        let response = await fetch(apiUrl, {
-            headers: {
-                "GeFeSLE-XMLHttpRequest": "true",
-                'Authorization': `Bearer ${storconfig.apiToken}`
-            },
-            credentials: 'include'
-        }
-        );
-        if (!response.ok) {
-            d('No lists found at this URL: ' + apiUrl);
-            console.error(' | Error calling API: ' + response.status + ' ' + response.statusText);
 
-            // also remove all the options from the listid select
+    await fetch(apiUrl, {
+        headers: {
+            "GeFeSLE-XMLHttpRequest": "true"
+        },
+        credentials: 'include'
+    }
+    )
+        .then(handleResponse)
+        .then(response => response.json())
+        .then(data => {
+            console.debug(' | API Response: ' + JSON.stringify(data));
             let listSelect = document.getElementById('listid');
             listSelect.innerHTML = '';
+            for (let list of data) {
+                let option = document.createElement('option');
+                option.value = list.id;
+                option.text = list.name;
+                listSelect.appendChild(option);
+            }
+            d('Lists loaded');
+            c(RC.OK);
+        })
+        .catch(error => {
+            d(error);
+            c(RC.ERROR);
+        });
 
-
-
-            return;
-        }
-        let data = await response.json();
-        console.debug(' | API Response: ' + JSON.stringify(data));
-        let listSelect = document.getElementById('listid');
-        listSelect.innerHTML = '';
-        for (let list of data) {
-            let option = document.createElement('option');
-            option.value = list.id;
-            option.text = list.name;
-            listSelect.appendChild(option);
-        }
-        d('Lists loaded');
-    } catch (error) {
-        d('EXCEPTION loading lists - no lists found at this URL:' + apiUrl);
-        console.error(' | EXCEPTION calling API: ' + error);
-        // also remove all the options from the listid select
-        let listSelect = document.getElementById('listid');
-        listSelect.innerHTML = '';
-    }
 }
 
 async function loadStorconfig() {
-    const storconfig = await browser.storage.local.get(['url', 'listid', 'listname', 'apiToken']);
-    //console.debug(' | Stored list parameters loaded: url=' + storconfig.url + ', listid=' + storconfig.listid + ', listname=' + storconfig.listname);
-    //console.debug(' | Stored API Token: ' + storconfig.apiToken);
+    const storconfig = await browser.storage.local.get(['url', 'listid', 'listname']);
     return storconfig;
 }
 
@@ -333,13 +319,7 @@ async function popupLoad() {
     const storConfig = await loadStorconfig();
 
     writeHeartbeatResult(storConfig.url);
-    // let [username, role] = await amloggedin(storConfig.url, storConfig.apiToken);
-    // if (username != null) {
-    //     // append these to the heartbeat div
-    //     let heartBeatElement = document.getElementById('heartbeat');
-    //     heartBeatElement.appendChild(document.createElement('br'));
-    //     heartBeatElement.appendChild(document.createTextNode('logged in as ' + username + ' with role ' + role));
-    //     }
+
     // When the form is submitted, send it to the REST API
     document.getElementById('addnew-form').addEventListener('submit', addThing);
 
@@ -367,11 +347,11 @@ async function popupLoad() {
     if (selectedText != null) {
         // if there are multiple lines, prepend each with markdown > quote character
         //selectedText = selectedText.replace(/^/gm, '> ');
-        
+
         // selected text is HTML; convert to markdown
         let converter = new showdown.Converter();
         selectedText = converter.makeMarkdown(selectedText);
-        
+
         easymde.value(selectedText);
     }
 
@@ -383,7 +363,7 @@ async function getTabSelection() {
     // tabs[0] is the active tab
     let activeTab = tabs[0];
     console.log('activeTab: ' + activeTab.id);
-    console.log('activeTab: ' + activeTab.url); 
+    console.log('activeTab: ' + activeTab.url);
     // Inject a content script into the active tab
     let results = await browser.tabs.executeScript(activeTab.id, {
         //this just gets selection as a string
@@ -496,32 +476,32 @@ async function loginRedirect() {
 
     let apiUrl = storconfig.url + '/me';
     console.log('apiUrl: ' + apiUrl);
-    fetch(apiUrl, {
+    await fetch(apiUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             "GeFeSLE-XMLHttpRequest": "true"
-            //'Authorization': `Bearer ${storconfig.apiToken}`
+
         },
         body: new URLSearchParams(new FormData(document.getElementById('loginform')))
     })
         .then(handleResponse)
         .then(response => response.json())
         .then(json => {
-            // on a successful login, contains json with elements {token: "token", username: "username", role: "role"}  
+            // on a successful login, contains json with elements {username: "username", role: "role"}  
             console.debug(`${fn} -- entire response: ${JSON.stringify(json)}`);
-            console.debug(`${fn} -- API token: ${json.token}`);
-            console.debug(`${fn} -- antiforgery token: ${json.antiforgerytoken.requestToken}`);
             console.debug(`${fn} -- username: ${json.username}`);
             console.debug(`${fn} -- role: ${json.role}`);
+            console.debug(`${fn} -- token: ${json.aftoken}`);
             // store the tokens in local storage
-            browser.storage.local.set({ apiToken: json.token });
-            browser.storage.local.set({ antiforgeToken: json.antiforgerytoken.requestToken });
+            browser.storage.local.set({ aftoken: json.aftoken });
+
             let msg = `Logged in to ${apiUrl} as ${json.username} with role ${json.role}`;
+            msg+=`<br>Token: ${json.aftoken}`;
             d(msg);
             c(RC.OK);
             console.log(msg);
-            
+
         })
         .catch(error => {
             console.error(error);
@@ -559,12 +539,11 @@ async function addThing(e) {
 
 
 
-    fetch(apiUrl, {
+    await fetch(apiUrl, {
         method: apiMethod,
         headers: {
             'Content-Type': 'application/json',
-            "GeFeSLE-XMLHttpRequest": "true",
-            'Authorization': `Bearer ${storconfig.apiToken}`
+            "GeFeSLE-XMLHttpRequest": "true"
         },
         credentials: 'include',
         body: JSON.stringify(data),
@@ -576,7 +555,7 @@ async function addThing(e) {
             if (response.ok) {
                 return response.text();
             }
-            })
+        })
 
         .then(data => {
             console.log('Success:', data);
@@ -592,6 +571,14 @@ async function addThing(e) {
             c(RC.ERROR);
         });
 
+}
+
+async function getCookie(name) {
+    let fn = 'getCookie'; console.debug(fn);
+    let cookie = await browser.cookies.get({ url: 'http://localhost:7036', name: name });
+    console.debug(`${fn} -- COOKIE STRING VALUE: ${cookie.value}`)
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
 }
 
 async function receiptUpload(e) {
@@ -611,27 +598,20 @@ async function receiptUpload(e) {
     apiUrl = storconfig.url + '/fileuploadxfer/';
     console.debug(`${fn} --> ${apiUrl}`);
 
-
+    let aftoken = await browser.storage.local.get('aftoken');
+    console.info(`${fn} -- aftoken: >>${aftoken.aftoken}<<`);
     // Call the REST API
     let data = new FormData();
     data.append('file', file);
     let apiMethod = 'POST';
-    
-    let token = await browser.storage.local.get('antiforgeToken');
-    console.debug(`${fn} -- anti-forgery token: ${JSON.stringify(token)}`);
-    if (token == null || token == '') {
-        d('No anti-forgery token found/obtained');
-        c(RC.ERROR);
-        return null;
-    }
+
     
 
     await fetch(apiUrl, {
         method: apiMethod,
         headers: {
             "GeFeSLE-XMLHttpRequest": "true",
-            'Authorization': `Bearer ${storconfig.apiToken}`,
-            'RequestVerificationToken': token.antiforgeToken
+            'RequestVerificationToken': aftoken.aftoken
         },
         credentials: 'include',
         body: data
