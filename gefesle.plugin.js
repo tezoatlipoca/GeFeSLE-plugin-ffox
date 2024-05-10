@@ -594,24 +594,42 @@ async function receiptUpload(e) {
     document.getElementById('result').appendChild(img);
 
     const storconfig = await loadStorconfig();
-
-    apiUrl = storconfig.url + '/fileuploadxfer/';
+    let aftoken = null;
+    apiUrl = storconfig.url + '/antiforgerytoken';
     console.debug(`${fn} --> ${apiUrl}`);
+    await fetch(apiUrl, {
+        headers: {
+            "GeFeSLE-XMLHttpRequest": "true"
+        },
+        credentials: 'include'
+    })
+        .then(handleResponse)
+        .then(response => response.json())
+        .then(json => {
+            aftoken = json;
+            console.debug(`${fn} -- aftoken: ${aftoken.requestToken}`)
+            return aftoken;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            d('Error: ' + error);
+            c(RC.ERROR);
+        });
+    
 
-    let aftoken = await browser.storage.local.get('aftoken');
-    console.info(`${fn} -- aftoken: >>${aftoken.aftoken}<<`);
+    
+    console.info(`${fn} -- aftoken: >>${aftoken.requestToken}<<`);
     // Call the REST API
     let data = new FormData();
     data.append('file', file);
+    apiUrl = storconfig.url + '/fileuploadxfer';
+    console.debug(`${fn} --> ${apiUrl}`);
     let apiMethod = 'POST';
-
-    
-
     await fetch(apiUrl, {
         method: apiMethod,
         headers: {
             "GeFeSLE-XMLHttpRequest": "true",
-            'RequestVerificationToken': aftoken.aftoken
+            'RequestVerificationToken': aftoken.requestToken
         },
         credentials: 'include',
         body: data
