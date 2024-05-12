@@ -1,8 +1,8 @@
 {
     "manifest_version": 2,
-    "name": "GeFeSLE Firefox Plugin",
-    "version": "0.1",
-    "description": "Firefox Plugin for GeFeSLE - Generic, Federated, Subscribable List Engine",
+    "name": "GeFeSLE Plugin",
+    "version": "0.1.0",
+    "description": "Plugin for GeFeSLE - Generic, Federated, Subscribable List Engine",
     "icons": {
       "48": "icons/gefesle.ff.png"
     },
@@ -13,7 +13,7 @@
       "default_icon": {
         "48": "icons/gefesle.ff.png"
       },
-      "default_title": "GeFeSLE Firefox Plugin",
+      "default_title": "GeFeSLE Plugin",
       "default_popup": "gefesle.popup.html"
     },
     "permissions": ["activeTab", "storage", "cookies","tabs", "<all_urls>"],
